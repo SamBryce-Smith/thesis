@@ -14,7 +14,8 @@ library(tidytext)
 #' @param dataset_col The name of the column in \code{df} containing dataset names. Default is "dataset".
 #' @param participant_col The name of the column in \code{df} containing the participating tool names. Default is "participant_id".
 #' @param return_plot_df Logical indicating whether to return the processed dataframe used for plotting purposes instead of the plot. Default is \code{FALSE}.
-#' @param plot_base_size The base font size for the plot. Default is 16.
+#' @param plot_base_size The base font size for the plot. Default is 14.
+#' @param label_size The size value for text label in heatmap cells (passed to geom_text). Default is 3.
 #' @param plot_labs Labels for the plot axes and legend (in ggplot2 labs format). Default is \code{labs(x = "Dataset", y = "Participant", fill = "Median across datasets")}.
 #' @param plot_legend_position Position of the legend in the plot. Default is "bottom".
 #' @param plot_nrow Number of rows in the facet grid. Default is 1.
@@ -31,7 +32,8 @@ plot_faceted_heatmap <- function(df,
                                  dataset_col = "dataset",
                                  participant_col = "participant_id",
                                  return_plot_df = FALSE,
-                                 plot_base_size = 16,
+                                 plot_base_size = 14,
+                                 label_size = 3,
                                  plot_labs =   labs(x = "Dataset",
                                                     y = "Participant",
                                                     fill = "Median across datasets"),
@@ -41,7 +43,7 @@ plot_faceted_heatmap <- function(df,
   
   plot_df <- df %>%
     filter(!!sym(metric_col) %in% metrics) %>%
-    mutate(metrics.value.label = paste(round(!!sym(value_col), 2), "+/-", round(!!sym(value_range_col), 2), sep = " "),
+    mutate(metrics.value.label = paste(round(!!sym(value_col), 2), "\n+/-", round(!!sym(value_range_col), 2), sep = " "),
            {{metric_col}} := as.factor(!!sym(metric_col)),
            {{participant_col}} := reorder_within(!!sym(participant_col), !!sym(value_col), !!sym(metric_col), fun = median)) 
   
@@ -54,12 +56,12 @@ plot_faceted_heatmap <- function(df,
     facet_wrap(paste("~", metric_col), scales = "free_y", nrow = plot_nrow, ncol = plot_ncol) +
     scale_y_reordered() +
     geom_tile() +
-    geom_text() +
+    geom_text(size = 3) +
     scale_fill_gradient(low = "white", high = "darkgreen") +
     theme_bw(base_size = plot_base_size) +
     plot_labs +
     theme(legend.position = plot_legend_position,
-          axis.text.x = element_text(angle = 90))
+          axis.text.x = element_text(angle = 90),)
   
 }
 
@@ -138,7 +140,7 @@ id_heatmaps <- map(window_sizes,
                                    filter(window_size == .x) %>%
                                    plot_faceted_heatmap(.,
                                                         c("Precision", "Sensitivity", "F1_score"),
-                                                        plot_ncol = 3,plot_base_size = 12
+                                                        plot_ncol = 3,plot_base_size = 14
                                    )
 )
 
@@ -166,7 +168,7 @@ if (!dir.exists("processed")) {dir.create("processed")}
 
 walk2(id_heatmaps,
       names(id_heatmaps),
-      ~ ggsave(filename = file.path("processed", paste0("denovo_id_heatmap.prec_sens_f1.window_size_", .y, ".pdf")),
+      ~ ggsave(filename = file.path("processed", paste0("2024-04-09_", "denovo_id_heatmap.prec_sens_f1.window_size_", .y, ".pdf")),
                plot = .x,
                width = 11.7,
                height = 8.3, units = "in")
