@@ -166,10 +166,19 @@ id_absquant1_comb_heatmaps <- map(window_sizes,
 
 if (!dir.exists("processed")) {dir.create("processed")}
 
+walk2(id_absquant0_comb_heatmaps,
+      names(id_absquant0_comb_heatmaps),
+      ~ ggsave(filename = file.path("processed", paste0("2024-04-11_", "denovo_annot_id_heatmap.prec_sens_f1.window_size_", .y, ".pdf")),
+               plot = .x,
+               width = 11.7,
+               height = 8.3, units = "in")
+      )
+
+
 walk2(id_heatmaps,
       names(id_heatmaps),
       ~ ggsave(filename = file.path("processed", paste0("2024-04-09_", "denovo_id_heatmap.prec_sens_f1.window_size_", .y, ".pdf")),
                plot = .x,
                width = 11.7,
                height = 8.3, units = "in")
-      )
+)
