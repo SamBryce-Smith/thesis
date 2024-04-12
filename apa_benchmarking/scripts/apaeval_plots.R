@@ -304,5 +304,36 @@ write_tsv(id_absquant1_df_summ_exp, file.path("processed", paste0("2024-04-12_id
 )
 
 
-          
-    
+# Above dfs only contain 'matching' metrics i.e. F1-score, precision and sensitivity 
+# Want summaries for abs quant (experimental only medians, per experiment medians)
+
+write_tsv(absquant0_df_summ_exp, file.path("processed", paste0("2024-04-12_absolute_quantification",
+                                                               ".mintpm_0",
+                                                               ".metric_medians",
+                                                               ".experimental_global",
+                                                               ".tsv"))
+          )
+
+write_tsv(absquant0_df_summ, file.path("processed", paste0("2024-04-12_absolute_quantification",
+                                                 ".mintpm_0",
+                                                 ".metric_medians",
+                                                 ".per_dataset",
+                                                 ".tsv"))
+          )
+       
+
+write_tsv(absquant1_df_summ_exp, file.path("processed", paste0("2024-04-12_absolute_quantification",
+                                                           ".mintpm_1",
+                                                           ".metric_medians",
+                                                           ".experimental_global",
+                                                           ".tsv"))
+)   
+
+
+write_tsv(absquant1_df_summ, file.path("processed", paste0("2024-04-12_absolute_quantification",
+                                                           ".mintpm_1",
+                                                           ".metric_medians",
+                                                           ".per_dataset",
+                                                           ".tsv"))
+)
+
