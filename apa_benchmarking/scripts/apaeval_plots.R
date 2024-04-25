@@ -1,6 +1,7 @@
 library(tidyverse)
 library(tidytext)
-
+library(ggbump)
+library(patchwork)
 
 #' Faceted Heatmap of summarised benchmarking metrics across datasets
 #'
@@ -9,7 +10,7 @@ library(tidytext)
 #' @param df dataframe containing APAeval benchmarking results for individual samples.
 #' @param metrics A character vector specifying the metrics to include in the plot.
 #' @param metric_col The name of the column in \code{df} containing the metric names. Default is "metric".
-#' @param value_col The name of the column in \code{df} containing the median values of the metrics (i.e. the value to control fill intensity and rank tools). Default is "metrics.value.median".
+#' @param value_col The name of the column in \code{df} containing the median values of the metrics (i.e. the value to control fill intensity and rank tool order on the y axis). Default is "metrics.value.median".
 #' @param value_range_col The name of the column in \code{df} containing the interquartile range (IQR) values of the metrics (to be added to text in each cell of heatmap) Default is "metrics.value.iqr".
 #' @param dataset_col The name of the column in \code{df} containing dataset names. Default is "dataset".
 #' @param participant_col The name of the column in \code{df} containing the participating tool names. Default is "participant_id".
@@ -141,6 +142,48 @@ rank_metrics <- function(df,
 }
 
 
+#' Make a bump plot comparing ranks in experimental data as a function of window size
+plot_rank_vs_window <- function(input_df, metric_str) {
+  # Filter the dataframe based on the specified metric
+  tmp_df <- input_df %>%
+    filter(metric == metric_str)
+  
+  # Define window sizes for plotting
+  plot_window_sizes_vec <- c(10, 25, 50, 100) %>%
+    set_names(c(25, 50, 75, 100))
+  
+  plot_window_sizes_df <- enframe(plot_window_sizes_vec, "plot_window_size", "window_size") %>%
+    mutate(plot_window_size = as.integer(plot_window_size))
+  
+  # Join window sizes with filtered dataframe
+  tmp_df <- tmp_df %>%
+    left_join(plot_window_sizes_df)
+  
+  # Plotting
+  plot <- tmp_df %>%
+    ggplot(aes(x = plot_window_size, y = rank.experimental, group = participant_id)) +
+    geom_point() +
+    geom_bump() +
+    scale_y_reverse(breaks = seq(0, 12)) +
+    geom_text(data = tmp_df %>%
+                filter(window_size == max(window_size)),
+              aes(label = participant_id), nudge_x = 50) +
+    scale_x_continuous(breaks = c(25, 50, 75, 100),
+                       limits = c(25, 200),
+                       labels = plot_window_sizes_vec) +
+    labs(title = str_to_title(str_replace(metric_str, "_", " ")),
+         x = "Window size (nt)",
+         y = "Rank (median of experimental samples)") +
+    theme_classic(base_size = 14) +
+    theme(legend.position = "none",
+          axis.line = element_blank())
+  
+  return(plot)
+}
+
+
+
+
 # identification challenge results
 id_df <- read_tsv("data/metrics_01.tsv")
 # absolute (TPM) quantification challenge results
@@ -152,7 +195,7 @@ id_df <- clean_apaeval_df(id_df)
 absquant0_df <- clean_apaeval_df(absquant0_df)
 absquant1_df <- clean_apaeval_df(absquant1_df)
 
-# for each participant, dataset, window_size + metric, calculate the median + IQR 
+# for each participant, dataset, window_size + metric, calculate the median + IQR. Rank participants according to median within each dataset
 id_df_summ <- summarise_metrics(id_df) %>%
   rank_metrics()
 absquant0_df_summ  <- summarise_metrics(absquant0_df) %>%
@@ -175,6 +218,37 @@ absquant1_df_summ_exp  <- absquant1_df %>%
   filter(datatype == "experimental") %>%
   summarise_metrics(group_cols = c("participant_id", "window_size", "metric")) %>%
   rank_metrics(group_cols = c("window_size", "metric"))
+
+# For globally ranked metrics, merge dfs together
+# i.e. single df with rank.experimental, rank.simulated as columns
+# also calcuate a difference in rank
+
+id_df_summ_comb <- full_join(filter(id_df_summ, dataset == "GTEXsim") %>% select(-dataset),
+          id_df_summ_exp,
+          by = c("participant_id", "window_size", "metric"),
+          suffix = c(".simulated", ".experimental"),
+          relationship = "one-to-one"
+          ) %>%
+  relocate(rank.simulated, .before = rank.experimental) %>%
+  # negative = poorer relative performance in experimental rel to simulated
+  mutate(rank_diff_sim2exp = rank.simulated - rank.experimental)
+
+absquant0_df_summ_comb <- full_join(filter(absquant0_df_summ, dataset == "GTEXsim") %>% select(-dataset),
+          absquant0_df_summ_exp,
+          by = c("participant_id", "window_size", "metric"),
+          suffix = c(".simulated", ".experimental"),
+          relationship = "one-to-one"
+) %>%
+  relocate(rank.simulated, .before = rank.experimental)
+
+absquant1_df_summ_comb <- full_join(filter(absquant1_df_summ, dataset == "GTEXsim") %>% select(-dataset),
+          absquant1_df_summ_exp,
+          by = c("participant_id", "window_size", "metric"),
+          suffix = c(".simulated", ".experimental"),
+          relationship = "one-to-one"
+) %>%
+  relocate(rank.simulated, .before = rank.experimental)
+
 
 # Where metrics overlap, visualise de-novo and annotation-based tools together
 common_metrics_idquant <- intersect(unique(id_df$metric), unique(absquant0_df$metric))
@@ -207,10 +281,63 @@ id_absquant1_df_summ_exp <- bind_rows(filter(id_df_summ_exp, metric %in% common_
                rank_outcol = "rank.combined")
 
 
+
+#### PLOTS
+
+
+## How does window size influence the ranking of tool performance?
+
+# bump plot, summarizing across all experimental (+ simulated) - window size on x axis
+
+# Make rank plots across window sizes for selected metrics
+window_size_metrics <- c("Precision", "Sensitivity", "F1_score", "Jaccard_index")
+
+window_size_exp_rank_bump_plot <- c("Precision", "Sensitivity", "F1_score", "Jaccard_index") %>%
+  map(~ plot_rank_vs_window(id_df_summ_comb, .x)) %>%
+  wrap_plots(ncol = 2, axis_titles = "collect")
+
+
+window_size_exp_rank_bump_plot
+
+
+
+# bump plot comparing simulated vs experimental ranks for a fixed window size across window sizes
+
+# Prepare df for plotting exper vs simulated
+exper_vs_sim_rank_plot_df <- id_df_summ_comb %>%
+  filter(metric %in% window_size_metrics) %>%
+  pivot_longer(cols = starts_with("rank."), names_to = "datatype", values_to = "rank",names_prefix = "rank.") %>%
+  mutate(datatype = factor(str_to_sentence(datatype), levels = c("Simulated", "Experimental")),
+         plot_label = if_else(datatype == "Experimental", participant_id, ""),
+         plot_metric = factor(str_to_title(str_replace_all(metric, "_", " ")),
+                              levels = str_to_title(str_replace_all(window_size_metrics, "_", " ")))
+  )
+
+
 # Vector of different window sizes for matching PAS
 window_sizes <- unique(id_df_summ$window_size) %>%
   .[!is.na(.)] %>%
   set_names()
+
+# Make faceted plot for 4 metrics across window sizes
+exper_vs_simm_rank_plots <- map2(.x = window_sizes,
+     .y = names(window_sizes),
+     ~ exper_vs_sim_rank_plot_df %>%
+       filter(window_size == .x) %>%
+       ggplot(aes(x = datatype, y = rank, group = participant_id, label = plot_label)) +
+       facet_wrap("~ plot_metric", ncol = 2) +
+       geom_point() +
+       geom_line() +
+       scale_y_reverse(breaks = seq(1,12,1)) +
+       geom_text(nudge_x = 0.25) +
+       labs(subtitle = paste0("Window size = ", .y),
+            x = "Dataset Type",
+            y = "Rank (by median across samples)") +
+       theme_bw(base_size = 14) +
+       theme(legend.position = "none",
+             panel.grid = element_blank()
+       )
+)
 
 
 # ID tools for precision, sensitivity and F1 score (1 for each window size)
