@@ -66,6 +66,92 @@ plot_faceted_heatmap <- function(df,
   
 }
 
+#' Faceted Heatmap of summarised benchmarking metrics across datasets (sorting by performance in a reference dataset)
+#'
+#' This function generates a faceted heatmap plot based on the provided dataframe and specifications. Is basically plot_faceted_heatmap but sorts by single dataset, not the median across all datasets
+#' 
+#' @param df dataframe containing APAeval benchmarking results for individual samples.
+#' @param metrics A character vector specifying the metrics to include in the plot.
+#' @param metrics A single character vector/string specifying the reference dataset for which to sort participants from 1..n.
+#' @param metric_col The name of the column in \code{df} containing the metric names. Default is "metric".
+#' @param value_col The name of the column in \code{df} containing the median values of the metrics (i.e. the value to control fill intensity and rank tool order on the y axis). Default is "metrics.value.median".
+#' @param value_range_col The name of the column in \code{df} containing the interquartile range (IQR) values of the metrics (to be added to text in each cell of heatmap) Default is "metrics.value.iqr".
+#' @param dataset_col The name of the column in \code{df} containing dataset names. Default is "dataset".
+#' @param participant_col The name of the column in \code{df} containing the participating tool names. Default is "participant_id".
+#' @param return_plot_df Logical indicating whether to return the processed dataframe used for plotting purposes instead of the plot. Default is \code{FALSE}.
+#' @param plot_base_size The base font size for the plot. Default is 14.
+#' @param label_size The size value for text label in heatmap cells (passed to geom_text). Default is 3.
+#' @param plot_label_sep The string to put between the value in value_col and value_range_col in heatmap cells. Default is "+/-" (can do e.g. "\n+/-" to put on separate lines)
+#' @param plot_labs Labels for the plot axes and legend (in ggplot2 labs format). Default is \code{labs(x = "Dataset", y = "Participant", fill = "Median across datasets")}.
+#' @param plot_legend_position Position of the legend in the plot. Default is "bottom".
+#' @param plot_nrow Number of rows in the facet grid. Default is 1.
+#' @param plot_ncol Number of columns in the facet grid. Default is 2.
+#' 
+#' @return a ggplot2 object containing a metric-faceted heatmap across datasets and tools. If \code{return_plot_df} is \code{TRUE}, returns the processed dataframe used for plotting.
+#' 
+#' @export
+plot_faceted_heatmap_ref <- function(df,
+                                     metrics,
+                                     ref_dataset = "AllExperimental",
+                                     metric_col = "metric",
+                                     value_col = "metrics.value.median",
+                                     value_range_col = "metrics.value.iqr",
+                                     dataset_col = "dataset",
+                                     participant_col = "participant_id",
+                                     plot_base_size = 14,
+                                     label_size = 3,
+                                     plot_label_sep = "+/-", # '\n+/-' to put on separate line
+                                     plot_labs = labs(x = "Dataset",
+                                                      y = "Participant",
+                                                      fill = "Median across samples"),
+                                     plot_legend_position = "bottom",
+                                     plot_nrow = 2,
+                                     plot_ncol = 2) {
+  
+  
+  value_col_select <- c(value_col, value_range_col)
+  group_cols <- c(participant_col, metric_col)
+  
+  # Subset to reference dataset
+  df_ref <- df %>%
+    filter(dataset == ref_dataset) %>%
+    rename_with(.fn = ~ paste0("reference.", .x, recycle0 = TRUE),
+                .cols = all_of(value_col_select)) %>%
+    select(all_of(group_cols), starts_with("reference."))
+  
+  
+  # Make a dummy column for ordering - contains the reference values for ranking for just single dataset (experimental summary)
+  df <- left_join(df, df_ref, by = group_cols) 
+
+  ref_value_col <- paste0("reference.", value_col)
+  
+  # Prepare df for plotting
+  plot_df <- df %>%
+    filter(metric %in% metrics) %>%
+    mutate(metrics.value.label = paste(round(!!sym(value_col), 2), plot_label_sep, round(!!sym(value_range_col), 2), sep = " "),
+           {{metric_col}} := factor(!!sym(metric_col), levels = metrics),
+           {{participant_col}} := reorder_within(!!sym(participant_col), !!sym(ref_value_col), !!sym(metric_col), fun = median)
+    ) 
+  
+  
+  plot_df %>%
+    ggplot(aes(x = !!sym(dataset_col),
+               y = !!sym(participant_col),
+               fill = !!sym(value_col),
+               label = metrics.value.label)
+           ) +
+    facet_wrap(paste("~", metric_col), scales = "free_y", nrow = plot_nrow, ncol = plot_ncol) +
+    scale_y_reordered() +
+    geom_tile() +
+    geom_text(size = label_size) +
+    scale_fill_gradient(low = "white", high = "darkgreen") +
+    theme_bw(base_size = plot_base_size) +
+    plot_labs +
+    theme(legend.position = plot_legend_position,
+          axis.text.x = element_text(angle = 90)
+          )
+}
+
 
 clean_apaeval_df <- function(df, rm_cols = c("...1"), id_col = "challenge_id") {
   
@@ -339,16 +425,33 @@ exper_vs_simm_rank_plots <- map2(.x = window_sizes,
        )
 )
 
+# Heatmaps of tool median + IQR for each dataset
 
-# ID tools for precision, sensitivity and F1 score (1 for each window size)
-id_heatmaps <- map(window_sizes,
-                   ~ id_df_summ %>%
-                                   filter(window_size == .x) %>%
-                                   plot_faceted_heatmap(.,
-                                                        c("Precision", "Sensitivity", "F1_score"),
-                                                        plot_ncol = 3,plot_base_size = 14
-                                   )
-)
+
+# Add medians + ranks from combining all experimental datasets
+id_df_summ <- id_df_summ_exp %>%
+  mutate(dataset = "AllExperimental") %>%
+  bind_rows(., id_df_summ) %>%
+  arrange(window_size, dataset, metric, rank)
+
+# Across all window sizes, make heatmap for prec, sens, f1 and jaccard (1 plot per window size) (ranking by median of all experimental samples)
+id_heatmaps_ref <- map(window_sizes,
+                       ~ plot_faceted_heatmap_ref(filter(id_df_summ, window_size == .x),
+                                                  metrics = window_size_metrics,
+                                                  ref_dataset = "AllExperimental")
+                       )
+
+
+
+# # ID tools for precision, sensitivity and F1 score (1 for each window size)
+# id_heatmaps <- map(window_sizes,
+#                    ~ id_df_summ %>%
+#                                    filter(window_size == .x) %>%
+#                                    plot_faceted_heatmap(.,
+#                                                         c("Precision", "Sensitivity", "F1_score"),
+#                                                         plot_ncol = 3,plot_base_size = 14
+#                                    )
+# )
 
 # ID tools + PAQR & QAPA on one plot for precision, sensitivity and F1 score (1 for each window size)
 id_absquant0_comb_heatmaps <- map(window_sizes,
