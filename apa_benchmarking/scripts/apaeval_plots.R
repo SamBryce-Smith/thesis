@@ -429,10 +429,33 @@ exper_vs_simm_rank_plots <- map2(.x = window_sizes,
 
 
 # Add medians + ranks from combining all experimental datasets
+# first, just for de-novo/annotated independently
 id_df_summ <- id_df_summ_exp %>%
   mutate(dataset = "AllExperimental") %>%
   bind_rows(., id_df_summ) %>%
   arrange(window_size, dataset, metric, rank)
+
+absquant0_df_summ <- absquant0_df_summ_exp %>%
+  mutate(dataset = "AllExperimental") %>%
+  bind_rows(., absquant0_df_summ) %>%
+  arrange(window_size, dataset, metric, rank)
+
+absquant1_df_summ <- absquant1_df_summ_exp %>%
+  mutate(dataset = "AllExperimental") %>%
+  bind_rows(., absquant1_df_summ) %>%
+  arrange(window_size, dataset, metric, rank)
+
+# now for combo of de-novo + annotated
+id_absquant0_df_summ <- id_absquant0_df_summ_exp %>%
+  mutate(dataset = "AllExperimental") %>%
+  bind_rows(id_absquant0_df_summ, .) %>%
+  arrange(window_size, dataset, metric, rank)
+
+id_absquant1_df_summ <- id_absquant1_df_summ_exp %>%
+  mutate(dataset = "AllExperimental") %>%
+  bind_rows(id_absquant1_df_summ, .) %>%
+  arrange(window_size, dataset, metric, rank)
+
 
 # Across all window sizes, make heatmap for prec, sens, f1 and jaccard (1 plot per window size) (ranking by median of all experimental samples)
 id_heatmaps_ref <- map(window_sizes,
@@ -441,6 +464,39 @@ id_heatmaps_ref <- map(window_sizes,
                                                   ref_dataset = "AllExperimental")
                        )
 
+absquant0_heatmaps_ref <- map(window_sizes,
+                       ~ plot_faceted_heatmap_ref(filter(absquant0_df_summ, window_size == .x),
+                                                  metrics = window_size_metrics,
+                                                  ref_dataset = "AllExperimental")
+)
+
+absquant1_heatmaps_ref <- map(window_sizes,
+                       ~ plot_faceted_heatmap_ref(filter(absquant1_df_summ, window_size == .x),
+                                                  metrics = window_size_metrics,
+                                                  ref_dataset = "AllExperimental")
+)
+
+
+# repeat for de-novo + reference-based combined
+id_absquant0_heatmaps_ref <- map(window_sizes,
+                                 ~ plot_faceted_heatmap_ref(filter(id_absquant0_df_summ, window_size == .x),
+                                                            metrics = window_size_metrics,
+                                                            ref_dataset = "AllExperimental")
+                                 )
+
+
+id_absquant1_heatmaps_ref <- map(window_sizes,
+                             ~ plot_faceted_heatmap_ref(filter(id_absquant1_df_summ, window_size == .x),
+                                                        metrics = window_size_metrics,
+                                                        ref_dataset = "AllExperimental")
+)
+
+
+# id_heatmaps_ref$`50`
+# absquant0_heatmaps_ref$`50`
+# absquant1_heatmaps_ref$`50`
+# id_absquant0_heatmaps_ref$`50`
+# id_absquant1_heatmaps_ref$`50`
 
 
 # # ID tools for precision, sensitivity and F1 score (1 for each window size)
@@ -454,23 +510,23 @@ id_heatmaps_ref <- map(window_sizes,
 # )
 
 # ID tools + PAQR & QAPA on one plot for precision, sensitivity and F1 score (1 for each window size)
-id_absquant0_comb_heatmaps <- map(window_sizes,
-    ~ id_absquant0_df_summ %>%
-      filter(window_size == .x) %>%
-      plot_faceted_heatmap(.,
-                           c("Precision", "Sensitivity", "F1_score"),
-                           plot_ncol = 3
-                           )
-    )
-
-id_absquant1_comb_heatmaps <- map(window_sizes,
-                                  ~ id_absquant1_df_summ %>%
-                                    filter(window_size == .x) %>%
-                                    plot_faceted_heatmap(.,
-                                                         c("Precision", "Sensitivity", "F1_score"),
-                                                         plot_ncol = 3
-                                    )
-)
+# id_absquant0_comb_heatmaps <- map(window_sizes,
+#     ~ id_absquant0_df_summ %>%
+#       filter(window_size == .x) %>%
+#       plot_faceted_heatmap(.,
+#                            c("Precision", "Sensitivity", "F1_score"),
+#                            plot_ncol = 3
+#                            )
+#     )
+# 
+# id_absquant1_comb_heatmaps <- map(window_sizes,
+#                                   ~ id_absquant1_df_summ %>%
+#                                     filter(window_size == .x) %>%
+#                                     plot_faceted_heatmap(.,
+#                                                          c("Precision", "Sensitivity", "F1_score"),
+#                                                          plot_ncol = 3
+#                                     )
+# )
 
 
 if (!dir.exists("processed")) {dir.create("processed")}
