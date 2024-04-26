@@ -98,6 +98,8 @@ plot_faceted_heatmap_ref <- function(df,
                                      value_range_col = "metrics.value.iqr",
                                      dataset_col = "dataset",
                                      participant_col = "participant_id",
+                                     fill_col = "metrics.value.median",
+                                     rank_by = "value",
                                      plot_base_size = 14,
                                      label_size = 2.5,
                                      plot_label_sep = "+/-", # '\n+/-' to put on separate line
@@ -109,7 +111,7 @@ plot_faceted_heatmap_ref <- function(df,
                                      plot_ncol = 2) {
   
   
-  value_col_select <- c(value_col, value_range_col)
+  value_col_select <- unique(c(value_col, value_range_col, fill_col))
   group_cols <- c(participant_col, metric_col)
   
   # Subset to reference dataset
@@ -123,7 +125,13 @@ plot_faceted_heatmap_ref <- function(df,
   # Make a dummy column for ordering - contains the reference values for ranking for just single dataset (experimental summary)
   df <- left_join(df, df_ref, by = group_cols) 
 
-  ref_value_col <- paste0("reference.", value_col)
+  if (rank_by == "value") {
+    ref_value_col <- paste0("reference.", value_col)
+  } else if (rank_by == "fill") {
+    ref_value_col <- paste0("reference.", fill_col)
+  } else {
+    stop("rank_by must be one of 'value' or 'fill'")
+  }
   
   # Prepare df for plotting
   plot_df <- df %>%
@@ -137,7 +145,7 @@ plot_faceted_heatmap_ref <- function(df,
   plot_df %>%
     ggplot(aes(x = !!sym(dataset_col),
                y = !!sym(participant_col),
-               fill = !!sym(value_col),
+               fill = !!sym(fill_col),
                label = metrics.value.label)
            ) +
     facet_wrap(paste("~", metric_col), scales = "free_y", nrow = plot_nrow, ncol = plot_ncol) +
@@ -498,35 +506,54 @@ id_absquant1_heatmaps_ref <- map(window_sizes,
 # id_absquant0_heatmaps_ref$`50`
 # id_absquant1_heatmaps_ref$`50`
 
+# Abs quant - summary plots of pearson r and FP TPM %
+#
+absquant0_heatmaps_ref <- map(window_sizes,
+    ~ plot_faceted_heatmap_ref(filter(absquant0_df_summ, window_size == .x) %>%
+                                 # messy, but need to - put % on fraction scale for fills to match
+                                 # and make dummy fill col so lower fraction = better fill/colour (and can sort best-worst in same order)
+                            
+                                 mutate(metrics.value.median = if_else(metric == "Percent_FP_TPM",
+                                                                              metrics.value.median / 100, metrics.value.median),
+                                        metrics.value.iqr = if_else(metric == "Percent_FP_TPM",
+                                                                       metrics.value.iqr / 100, metrics.value.iqr),
+                                        metric = if_else(metric == "Percent_FP_TPM", "Fraction_FP_TPM", metric),
+                                        plot_fill = if_else(metric == "Fraction_FP_TPM", 1 - metrics.value.median, metrics.value.median)
+                                        ),
+                               metrics = c("Pearson_r", "Fraction_FP_TPM"),
+                               ref_dataset = "AllExperimental",
+                               fill_col = "plot_fill", # flipped fraction TPM so green = good
+                               rank_by = "fill", # rank by lowest = best for fraction TPM
+                               label_size = 3,
+                               plot_label_sep = "\n+/-" # put IQR underneath median
+                               )
+)
 
-# # ID tools for precision, sensitivity and F1 score (1 for each window size)
-# id_heatmaps <- map(window_sizes,
-#                    ~ id_df_summ %>%
-#                                    filter(window_size == .x) %>%
-#                                    plot_faceted_heatmap(.,
-#                                                         c("Precision", "Sensitivity", "F1_score"),
-#                                                         plot_ncol = 3,plot_base_size = 14
-#                                    )
-# )
 
-# ID tools + PAQR & QAPA on one plot for precision, sensitivity and F1 score (1 for each window size)
-# id_absquant0_comb_heatmaps <- map(window_sizes,
-#     ~ id_absquant0_df_summ %>%
-#       filter(window_size == .x) %>%
-#       plot_faceted_heatmap(.,
-#                            c("Precision", "Sensitivity", "F1_score"),
-#                            plot_ncol = 3
-#                            )
-#     )
-# 
-# id_absquant1_comb_heatmaps <- map(window_sizes,
-#                                   ~ id_absquant1_df_summ %>%
-#                                     filter(window_size == .x) %>%
-#                                     plot_faceted_heatmap(.,
-#                                                          c("Precision", "Sensitivity", "F1_score"),
-#                                                          plot_ncol = 3
-#                                     )
-# )
+absquant1_heatmaps_ref <- map(window_sizes,
+                              ~ plot_faceted_heatmap_ref(filter(absquant1_df_summ, window_size == .x) %>%
+                                                           # messy, but need to - put % on fraction scale for fills to match
+                                                           # and make dummy fill col so lower fraction = better fill/colour (and can sort best-worst in same order)
+                                                           
+                                                           mutate(metrics.value.median = if_else(metric == "Percent_FP_TPM",
+                                                                                                 metrics.value.median / 100, metrics.value.median),
+                                                                  metrics.value.iqr = if_else(metric == "Percent_FP_TPM",
+                                                                                              metrics.value.iqr / 100, metrics.value.iqr),
+                                                                  metric = if_else(metric == "Percent_FP_TPM", "Fraction_FP_TPM", metric),
+                                                                  plot_fill = if_else(metric == "Fraction_FP_TPM", 1 - metrics.value.median, metrics.value.median)
+                                                           ),
+                                                         metrics = c("Pearson_r", "Fraction_FP_TPM"),
+                                                         ref_dataset = "AllExperimental",
+                                                         fill_col = "plot_fill", # flipped fraction TPM so green = good
+                                                         rank_by = "fill", # rank by lowest = best for fraction TPM
+                                                         label_size = 3,
+                                                         plot_label_sep = "\n+/-" # put IQR underneath median
+                                                         )
+)
+
+
+# absquant0_heatmaps_ref$`50`
+# absquant1_heatmaps_ref$`50`
 
 # output plots to disk
 
@@ -576,6 +603,30 @@ walk2(id_absquant1_heatmaps_ref,
                height = 8.3, units = "in")
 )
 
+## abs quant heatmaps
+
+walk2(absquant0_heatmaps_ref,
+      names(absquant0_heatmaps_ref),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-04-26_",
+                                           "absquant0_heatmap.corr_fp.window_size_",
+                                           .y, ".pdf")),
+               plot = .x,
+               width = 11.7,
+               height = 8.3, units = "in")
+)
+
+walk2(absquant1_heatmaps_ref,
+      names(absquant1_heatmaps_ref),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-04-26_",
+                                           "absquant1_heatmap.corr_fp.window_size_",
+                                           .y, ".pdf")),
+               plot = .x,
+               width = 11.7,
+               height = 8.3, units = "in")
+)
+
 
 ## rank plots
 
@@ -599,6 +650,9 @@ walk2(exper_vs_simm_rank_plots,
                width = 11.7,
                height = 8.3, units = "in")
 )
+
+
+
 
 
 # Output summary TSVs with median and ranks
