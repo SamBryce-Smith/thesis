@@ -99,7 +99,7 @@ plot_faceted_heatmap_ref <- function(df,
                                      dataset_col = "dataset",
                                      participant_col = "participant_id",
                                      plot_base_size = 14,
-                                     label_size = 3,
+                                     label_size = 2.5,
                                      plot_label_sep = "+/-", # '\n+/-' to put on separate line
                                      plot_labs = labs(x = "Dataset",
                                                       y = "Participant",
@@ -528,21 +528,73 @@ id_absquant1_heatmaps_ref <- map(window_sizes,
 #                                     )
 # )
 
+# output plots to disk
 
-if (!dir.exists("processed")) {dir.create("processed")}
+main_outdir <- "processed"
+heatmap_outdir <- file.path(main_outdir, "summary_heatmaps")
+ranks_outdir <- file.path(main_outdir, "ranking_plots")
+tbls_outdir <- file.path(main_outdir, "processed_tables")
 
-walk2(id_absquant0_comb_heatmaps,
-      names(id_absquant0_comb_heatmaps),
-      ~ ggsave(filename = file.path("processed", paste0("2024-04-11_", "denovo_annot_id_heatmap.prec_sens_f1.window_size_", .y, ".pdf")),
+if (!dir.exists(heatmap_outdir)) {dir.create(heatmap_outdir)}
+if (!dir.exists(ranks_outdir)) {dir.create(ranks_outdir)}
+if (!dir.exists(tbls_outdir)) {dir.create(tbls_outdir)}
+
+
+# de novo only
+
+walk2(id_heatmaps_ref,
+      names(id_heatmaps_ref),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-04-26_",
+                                           "denovo_id_heatmap.prec_sens_f1_jacc.window_size_", .y, ".pdf")),
                plot = .x,
                width = 11.7,
                height = 8.3, units = "in")
-      )
+)
+
+# combined de novo + ref
+walk2(id_absquant0_heatmaps_ref,
+      names(id_absquant0_heatmaps_ref),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-04-26_",
+                                           "denovo_annot0_id_heatmap.prec_sens_f1_jacc.window_size_",
+                                           .y, ".pdf")),
+               plot = .x,
+               width = 11.7,
+               height = 8.3, units = "in")
+)
 
 
-walk2(id_heatmaps,
-      names(id_heatmaps),
-      ~ ggsave(filename = file.path("processed", paste0("2024-04-09_", "denovo_id_heatmap.prec_sens_f1.window_size_", .y, ".pdf")),
+walk2(id_absquant1_heatmaps_ref,
+      names(id_absquant1_heatmaps_ref),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-04-26_",
+                                           "denovo_annot1_id_heatmap.prec_sens_f1_jacc.window_size_",
+                                           .y, ".pdf")),
+               plot = .x,
+               width = 11.7,
+               height = 8.3, units = "in")
+)
+
+
+## rank plots
+
+ggsave(filename = file.path(ranks_outdir,
+                            paste0("2024-04-26_",
+                                   "denovo_ranks_window_sizes.prec_sens_f1_jacc",
+                                   ".pdf")),
+       plot = window_size_exp_rank_bump_plot, 
+       width = 11.7,
+       height = 8.3, units = "in")
+
+
+walk2(exper_vs_simm_rank_plots,
+      names(exper_vs_simm_rank_plots),
+      ~ ggsave(filename = file.path(ranks_outdir,
+                                    paste0("2024-04-26_",
+                                           "denovo_ranks_window_sizes.prec_sens_f1_jacc.window_size_",
+                                           .y,
+                                           ".pdf")),
                plot = .x,
                width = 11.7,
                height = 8.3, units = "in")
@@ -559,7 +611,8 @@ walk2(id_heatmaps,
 # id_absquant0_df_summ_exp
 # id_absquant1_df_summ_exp
 
-write_tsv(id_absquant0_df_summ, file.path("processed", paste0("2024-04-12_identification_denovo_reference",
+write_tsv(id_absquant0_df_summ, file.path(tbls_outdir,
+                                          paste0("2024-04-26_identification_denovo_reference",
                                         ".mintpm_0",
                                         ".metric_medians",
                                         ".per_dataset",
@@ -567,7 +620,7 @@ write_tsv(id_absquant0_df_summ, file.path("processed", paste0("2024-04-12_identi
           )
 
 
-write_tsv(id_absquant1_df_summ, file.path("processed", paste0("2024-04-12_identification_denovo_reference",
+write_tsv(id_absquant1_df_summ, file.path(tbls_outdir, paste0("2024-04-26_identification_denovo_reference",
                                                               ".mintpm_1",
                                                               ".metric_medians",
                                                               ".per_dataset",
@@ -575,14 +628,15 @@ write_tsv(id_absquant1_df_summ, file.path("processed", paste0("2024-04-12_identi
           )
 
 
-write_tsv(id_absquant0_df_summ_exp, file.path("processed", paste0("2024-04-12_identification_denovo_reference",
+write_tsv(id_absquant0_df_summ_exp, file.path(tbls_outdir, paste0("2024-04-26_identification_denovo_reference",
                                                               ".mintpm_0",
                                                               ".metric_medians",
                                                               ".experimental_global",
                                                               ".tsv"))
 )
 
-write_tsv(id_absquant1_df_summ_exp, file.path("processed", paste0("2024-04-12_identification_denovo_reference",
+write_tsv(id_absquant1_df_summ_exp, file.path(tbls_outdir,
+                                              paste0("2024-04-26_identification_denovo_reference",
                                                                   ".mintpm_1",
                                                                   ".metric_medians",
                                                                   ".experimental_global",
@@ -593,14 +647,14 @@ write_tsv(id_absquant1_df_summ_exp, file.path("processed", paste0("2024-04-12_id
 # Above dfs only contain 'matching' metrics i.e. F1-score, precision and sensitivity 
 # Want summaries for abs quant (experimental only medians, per experiment medians)
 
-write_tsv(absquant0_df_summ_exp, file.path("processed", paste0("2024-04-12_absolute_quantification",
+write_tsv(absquant0_df_summ_exp, file.path(tbls_outdir,paste0("2024-04-26_absolute_quantification",
                                                                ".mintpm_0",
                                                                ".metric_medians",
                                                                ".experimental_global",
                                                                ".tsv"))
           )
 
-write_tsv(absquant0_df_summ, file.path("processed", paste0("2024-04-12_absolute_quantification",
+write_tsv(absquant0_df_summ, file.path(tbls_outdir, paste0("2024-04-26_absolute_quantification",
                                                  ".mintpm_0",
                                                  ".metric_medians",
                                                  ".per_dataset",
@@ -608,7 +662,7 @@ write_tsv(absquant0_df_summ, file.path("processed", paste0("2024-04-12_absolute_
           )
        
 
-write_tsv(absquant1_df_summ_exp, file.path("processed", paste0("2024-04-12_absolute_quantification",
+write_tsv(absquant1_df_summ_exp, file.path(tbls_outdir, paste0("2024-04-26_absolute_quantification",
                                                            ".mintpm_1",
                                                            ".metric_medians",
                                                            ".experimental_global",
@@ -616,7 +670,7 @@ write_tsv(absquant1_df_summ_exp, file.path("processed", paste0("2024-04-12_absol
 )   
 
 
-write_tsv(absquant1_df_summ, file.path("processed", paste0("2024-04-12_absolute_quantification",
+write_tsv(absquant1_df_summ, file.path(tbls_outdir, paste0("2024-04-26_absolute_quantification",
                                                            ".mintpm_1",
                                                            ".metric_medians",
                                                            ".per_dataset",
