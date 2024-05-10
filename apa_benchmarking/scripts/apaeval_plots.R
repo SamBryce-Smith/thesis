@@ -499,7 +499,7 @@ id_absquant1_heatmaps_ref <- map(window_sizes,
                                                         ref_dataset = "AllExperimental")
 )
 
-
+  
 # id_heatmaps_ref$`50`
 # absquant0_heatmaps_ref$`50`
 # absquant1_heatmaps_ref$`50`
@@ -578,6 +578,28 @@ walk2(id_heatmaps_ref,
                width = 11.7,
                height = 8.3, units = "in")
 )
+
+# ref-based identification only
+walk2(absquant0_heatmaps_ref,
+      names(absquant0_heatmaps_ref),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-05-10_",
+                                           "annot0_id_heatmap.prec_sens_f1_jacc.window_size_", .y, ".pdf")),
+               plot = .x,
+               width = 11.7,
+               height = 8.3, units = "in")
+)
+
+walk2(absquant1_heatmaps_ref,
+      names(absquant1_heatmaps_ref),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-05-10_",
+                                           "annot1_id_heatmap.prec_sens_f1_jacc.window_size_", .y, ".pdf")),
+               plot = .x,
+               width = 11.7,
+               height = 8.3, units = "in")
+)
+
 
 # combined de novo + ref
 walk2(id_absquant0_heatmaps_ref,
