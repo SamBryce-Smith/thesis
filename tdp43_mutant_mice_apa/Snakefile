@@ -1,0 +1,116 @@
+import pandas as pd
+import os
+
+sample_tbl = pd.read_csv(config["sample_table"])
+output_dir = config["output_dir"]
+scripts_dir = config["scripts_dir"]
+
+# Define function to access file paths using lambda wildcards
+def get_file_path(df, experiment_name, column_name):
+    return df.loc[df['experiment_name'] == experiment_name, column_name].values[0]
+
+
+rule all:
+    input:
+        expand(os.path.join(output_dir, "{experiment_name}", "{experiment_name}.mean_pau.tsv"), experiment_name=sample_tbl['experiment_name']),
+        expand(os.path.join(output_dir, "{experiment_name}", "{experiment_name}.mean_psi.tsv"), experiment_name=sample_tbl['experiment_name']),
+        expand(os.path.join(output_dir, "{experiment_name}", "{experiment_name}.psi.per_sample.tsv"), experiment_name=sample_tbl['experiment_name']),
+        expand(os.path.join(output_dir, "{experiment_name}", "{experiment_name}.representative.pas.tsv"), experiment_name=sample_tbl['experiment_name']),
+        expand(os.path.join(output_dir, "{experiment_name}", "{experiment_name}.representative.total_expression.tsv"), experiment_name=sample_tbl['experiment_name'])
+
+
+rule calculate_qapa_means_psis:
+    input:
+        sample_table = lambda wildcards: get_file_path(sample_tbl, wildcards.experiment_name, 'sample_table'),
+        contrast_table = lambda wildcards: get_file_path(sample_tbl, wildcards.experiment_name, 'contrasts_table'),
+        pau_table = lambda wildcards: get_file_path(sample_tbl, wildcards.experiment_name, 'qapa_quant')
+
+    output:
+        mean_pau = os.path.join(output_dir, "{experiment_name}", "{experiment_name}.mean_pau.tsv"),
+        mean_psi = os.path.join(output_dir, "{experiment_name}", "{experiment_name}.mean_psi.tsv")
+
+    params:
+        output_prefix = os.path.join(output_dir, "{experiment_name}", "{experiment_name}"),
+        utils_script = os.path.join(scripts_dir, "calculate_utils.R")
+
+    log:
+        stdout = os.path.join(output_dir, "logs", "{experiment_name}", "calculate_qapa_means_psis.log.stdout.txt"),
+        stderr = os.path.join(output_dir, "logs", "{experiment_name}", "calculate_qapa_means_psis.log.stderr.txt")
+
+    container:
+        "docker://sambrycesmith/tidyverse_optparse:4.3.2_6dfa7c1"
+
+    shell:
+        """
+        Rscript scripts/calculate_qapa_means_psis.R \
+        -s {input.sample_table} \
+        -c {input.contrast_table} \
+        -i {input.pau_table} \
+        -o {params.output_prefix} \
+        -u {params.utils_script} \
+        1> {log.stdout} \
+        2> {log.stderr}
+        """
+
+
+rule calculate_labrat_psis:
+    input:
+        sample_table = lambda wildcards: get_file_path(sample_tbl, wildcards.experiment_name, 'sample_table'),
+        contrast_table = lambda wildcards: get_file_path(sample_tbl, wildcards.experiment_name, 'contrasts_table'),
+        pau_table = lambda wildcards: get_file_path(sample_tbl, wildcards.experiment_name, 'qapa_quant')
+
+    output:
+        psi_per_sample = os.path.join(output_dir, "{experiment_name}", "{experiment_name}.psi.per_sample.tsv"),
+        psi_per_sample_na = os.path.join(output_dir, "{experiment_name}", "{experiment_name}.psi.per_sample_na.tsv")
+
+    params:
+        output_prefix = os.path.join(output_dir, "{experiment_name}", "{experiment_name}"),
+        utils_script = os.path.join(scripts_dir, "calculate_utils.R")
+
+    log:
+        stdout = os.path.join(output_dir, "logs", "{experiment_name}", "calculate_labrat_psis.log.stdout.txt"),
+        stderr = os.path.join(output_dir, "logs", "{experiment_name}", "calculate_labrat_psis.log.stderr.txt")
+
+    container:
+        "docker://sambrycesmith/tidyverse_optparse:4.3.2_6dfa7c1"
+
+    shell:
+        """
+        Rscript scripts/calculate_labrat_psis.R \
+        -s {input.sample_table} \
+        -c {input.contrast_table} \
+        -i {input.pau_table} \
+        -o {params.output_prefix} \
+        -u {params.utils_script} \
+        1> {log.stdout} \
+        2> {log.stderr}
+        """
+
+
+rule representative_pas:
+    input:
+        dexseq=lambda wildcards: get_file_path(sample_tbl, wildcards.experiment_name, 'dexseq_table')
+    output:
+        representative_pas=os.path.join(output_dir, "{experiment_name}", "{experiment_name}" + ".representative.pas.tsv"),
+        representative_total_expression=os.path.join(output_dir, "{experiment_name}", "{experiment_name}" + ".representative.total_expression.tsv")
+    params:
+        significance_threshold=config["significance_threshold"],
+        foldchange_column=config["foldchange_column"],
+        output_prefix = os.path.join(output_dir, "{experiment_name}", "{experiment_name}")
+    log:
+        stdout = os.path.join(output_dir, "logs", "{experiment_name}", "representative_pas.log.stdout.txt"),
+        stderr = os.path.join(output_dir, "logs", "{experiment_name}", "representative_pas.log.stderr.txt")
+
+    container:
+        "docker://sambrycesmith/tidyverse_optparse:4.3.2_6dfa7c1"
+
+    shell:
+        """
+        Rscript scripts/representative_pas.R \
+        --dexseq {input.dexseq} \
+        --significance_threshold {params.significance_threshold} \
+        --foldchange_column {params.foldchange_column} \
+        --output_prefix {params.output_prefix} \
+        1> {log.stdout} \
+        2> {log.stderr}
+        """

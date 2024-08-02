@@ -1,0 +1,22 @@
+
+# sample table of 
+# experiment_name | sample_table | contrasts_table | qapa_quant
+# experiment_name - unique identifier for experiment (used for output file names/directories)
+# sample_table - path to sample table CSV used as input to QAPA_snakemake
+# contrasts_table - path to contrasts CSV used as input to QAPA_snakemake
+# qapa_quant - path to qapa quant output TSV produced by QAPA_snakemake (usually all_samples.pau_results.txt)
+# dexseq_table - path to processed DEXSeq results table produced by QAPA_snakemake (suffixed with .results.processed.tsv)
+sample_table: config/qapa_mouse_data_sample_tbl.csv
+
+# path to top-level output directory
+output_dir: processed/2024-02-29/
+
+# standard significance threshold for identifying target PAS
+significance_threshold: 0.05
+
+# prefix for fold change column in dexseq table.
+# default = "log2fold_", which is always set by DEXSeq
+foldchange_column: "log2fold_"
+
+# path to directory containing pipeline scripts (this should rarely be changed)
+scripts_dir: scripts/
