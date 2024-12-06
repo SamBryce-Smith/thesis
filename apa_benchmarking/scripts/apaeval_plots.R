@@ -3,70 +3,8 @@ library(tidytext)
 library(ggbump)
 library(patchwork)
 
-#' Faceted Heatmap of summarised benchmarking metrics across datasets
-#'
-#' This function generates a faceted heatmap plot based on the provided dataframe and specifications.
-#' 
-#' @param df dataframe containing APAeval benchmarking results for individual samples.
-#' @param metrics A character vector specifying the metrics to include in the plot.
-#' @param metric_col The name of the column in \code{df} containing the metric names. Default is "metric".
-#' @param value_col The name of the column in \code{df} containing the median values of the metrics (i.e. the value to control fill intensity and rank tool order on the y axis). Default is "metrics.value.median".
-#' @param value_range_col The name of the column in \code{df} containing the interquartile range (IQR) values of the metrics (to be added to text in each cell of heatmap) Default is "metrics.value.iqr".
-#' @param dataset_col The name of the column in \code{df} containing dataset names. Default is "dataset".
-#' @param participant_col The name of the column in \code{df} containing the participating tool names. Default is "participant_id".
-#' @param return_plot_df Logical indicating whether to return the processed dataframe used for plotting purposes instead of the plot. Default is \code{FALSE}.
-#' @param plot_base_size The base font size for the plot. Default is 14.
-#' @param label_size The size value for text label in heatmap cells (passed to geom_text). Default is 3.
-#' @param plot_labs Labels for the plot axes and legend (in ggplot2 labs format). Default is \code{labs(x = "Dataset", y = "Participant", fill = "Median across datasets")}.
-#' @param plot_legend_position Position of the legend in the plot. Default is "bottom".
-#' @param plot_nrow Number of rows in the facet grid. Default is 1.
-#' @param plot_ncol Number of columns in the facet grid. Default is 2.
-#' 
-#' @return a ggplot2 object containing a metric-faceted heatmap across datasets and tools. If \code{return_plot_df} is \code{TRUE}, returns the processed dataframe used for plotting.
-#' 
-#' @export
-plot_faceted_heatmap <- function(df,
-                                 metrics,
-                                 metric_col = "metric",
-                                 value_col = "metrics.value.median",
-                                 value_range_col = "metrics.value.iqr",
-                                 dataset_col = "dataset",
-                                 participant_col = "participant_id",
-                                 return_plot_df = FALSE,
-                                 plot_base_size = 14,
-                                 label_size = 3,
-                                 plot_labs =   labs(x = "Dataset",
-                                                    y = "Participant",
-                                                    fill = "Median across datasets"),
-                                 plot_legend_position = "bottom",
-                                 plot_nrow = 1,
-                                 plot_ncol = 2) {
-  
-  plot_df <- df %>%
-    filter(!!sym(metric_col) %in% metrics) %>%
-    mutate(metrics.value.label = paste(round(!!sym(value_col), 2), "\n+/-", round(!!sym(value_range_col), 2), sep = " "),
-           {{metric_col}} := as.factor(!!sym(metric_col)),
-           {{participant_col}} := reorder_within(!!sym(participant_col), !!sym(value_col), !!sym(metric_col), fun = median)) 
-  
-  if (return_plot_df) {
-    return(plot_df)
-  }
-  
-  plot_df %>%
-    ggplot(aes(x = !!sym(dataset_col), y = !!sym(participant_col), fill = !!sym(value_col), label = metrics.value.label)) +
-    facet_wrap(paste("~", metric_col), scales = "free_y", nrow = plot_nrow, ncol = plot_ncol) +
-    scale_y_reordered() +
-    geom_tile() +
-    geom_text(size = 3) +
-    scale_fill_gradient(low = "white", high = "darkgreen") +
-    theme_bw(base_size = plot_base_size) +
-    plot_labs +
-    theme(legend.position = plot_legend_position,
-          axis.text.x = element_text(angle = 90),)
-  
-}
 
-#' Faceted Heatmap of summarised benchmarking metrics across datasets (sorting by performance in a reference dataset)
+#' Faceted Heatmap of summarised benchmarking metrics across datasets (sorting by performance in a reference dataset per metric)
 #'
 #' This function generates a faceted heatmap plot based on the provided dataframe and specifications. Is basically plot_faceted_heatmap but sorts by single dataset, not the median across all datasets
 #' 
@@ -138,6 +76,7 @@ plot_faceted_heatmap_ref <- function(df,
     filter(metric %in% metrics) %>%
     mutate(metrics.value.label = paste(round(!!sym(value_col), 2), plot_label_sep, round(!!sym(value_range_col), 2), sep = " "),
            {{metric_col}} := factor(!!sym(metric_col), levels = metrics),
+           # ranks within 'facet'/group according to median in single reference dataset
            {{participant_col}} := reorder_within(!!sym(participant_col), !!sym(ref_value_col), !!sym(metric_col), fun = median)
     ) 
   
@@ -158,6 +97,85 @@ plot_faceted_heatmap_ref <- function(df,
     theme(legend.position = plot_legend_position,
           axis.text.x = element_text(angle = 90)
           )
+}
+
+
+#' Faceted Heatmap of summarised benchmarking metrics across datasets (with a universal y-axis label sorting)
+#'
+#' This function generates a faceted heatmap plot based on the provided dataframe and specifications.
+#' Unlike `plot_faceted_heatmap_ref`, the y-axis order remains consistent across all facets and is taken as is from the input dataframe
+#' 
+#' @param df dataframe containing APAeval benchmarking results for individual samples.
+#' @param metrics A character vector specifying the metrics to include in the plot.
+#' @param participant_order Character vector specifying the order of participant_col values along the y axis. Must contain all values in participant_id column, otherwise will be silently dropped
+#' @param metric_col The name of the column in \code{df} containing the metric names. Default is "metric".
+#' @param value_col The name of the column in \code{df} containing the median values of the metrics (i.e., the value to control fill intensity). Default is "metrics.value.median".
+#' @param value_range_col The name of the column in \code{df} containing the interquartile range (IQR) values of the metrics (to be added to text in each cell of heatmap). Default is "metrics.value.iqr".
+#' @param dataset_col The name of the column in \code{df} containing dataset names. Default is "dataset".
+#' @param participant_col The name of the column in \code{df} containing the participating tool names. Default is "participant_id".
+#' @param return_plot_df Logical indicating whether to return the processed dataframe used for plotting purposes instead of the plot. Default is \code{FALSE}.
+#' @param plot_base_size The base font size for the plot. Default is 14.
+#' @param label_size The size value for text label in heatmap cells (passed to geom_text). Default is 3.
+#' @param plot_label_sep The string to put between the value in value_col and value_range_col in heatmap cells. Default is "+/-".
+#' @param plot_labs Labels for the plot axes and legend (in ggplot2 labs format). Default is \code{labs(x = "Dataset", y = "Participant", fill = "Median across datasets")}.
+#' @param plot_legend_position Position of the legend in the plot. Default is "bottom".
+#' @param plot_nrow Number of rows in the facet grid. Default is 1.
+#' @param plot_ncol Number of columns in the facet grid. Default is 2.
+#' 
+#' @return a ggplot2 object containing a metric-faceted heatmap across datasets and tools. If \code{return_plot_df} is \code{TRUE}, returns the processed dataframe used for plotting.
+#' 
+#' @export
+plot_faceted_heatmap <- function(df,
+                                 metrics,
+                                 participant_order,
+                                 metric_col = "metric",
+                                 value_col = "metrics.value.median",
+                                 value_range_col = "metrics.value.iqr",
+                                 dataset_col = "dataset",
+                                 participant_col = "participant_id",
+                                 fill_col = "metrics.value.median",
+                                 plot_base_size = 14,
+                                 label_size = 2.5,
+                                 plot_label_sep = "+/-",
+                                 plot_labs = labs(x = "Dataset",
+                                                  y = "Participant",
+                                                  fill = "Median across samples"),
+                                 plot_legend_position = "bottom",
+                                 plot_nrow = 2,
+                                 plot_ncol = 2) {
+  
+  
+  # Ensure all values in participant_col are in participant_order
+  missing_participants <- setdiff(unique(df[[participant_col]]), participant_order)
+  if (length(missing_participants) > 0) {
+    stop("The following values provided in `participant_order` are missing from the `participant_col` column: ", 
+            paste(missing_participants, collapse = ", "))
+  }
+  
+  
+  # Prepare df for plotting
+  plot_df <- df %>%
+    filter(metric %in% metrics) %>%
+    mutate(metrics.value.label = paste(round(!!sym(value_col), 2), plot_label_sep, round(!!sym(value_range_col), 2), sep = " "),
+           {{metric_col}} := factor(!!sym(metric_col), levels = metrics),
+           {{participant_col}} := factor(!!sym(participant_col), levels = participant_order) # Consistent y-axis ordering
+    )
+  
+  plot_df %>%
+    ggplot(aes(x = !!sym(dataset_col),
+               y = !!sym(participant_col),
+               fill = !!sym(fill_col),
+               label = metrics.value.label)
+    ) +
+    facet_wrap(paste("~", metric_col), scales = "fixed", nrow = plot_nrow, ncol = plot_ncol) +
+    geom_tile() +
+    geom_text(size = label_size) +
+    scale_fill_gradient(low = "white", high = "darkgreen") +
+    theme_bw(base_size = plot_base_size) +
+    plot_labs +
+    theme(legend.position = plot_legend_position,
+          axis.text.x = element_text(angle = 90)
+    )
 }
 
 
@@ -234,6 +252,39 @@ rank_metrics <- function(df,
     mutate("{rank_outcol}":= min_rank(desc(!!sym(rank_by)))) %>%
     ungroup()
 }
+
+
+#' Generate Participant Order Based on Ranking for a Single Metric and Dataset
+#'
+#' This function generates a character vector of participant IDs sorted by their rank for a specified metric and dataset. Useful as input to `plot_faceted_heatmap`
+#'
+#' @param df A dataframe containing benchmarking results.
+#' @param metric_value The value of the metric to filter. Default is "F1_score".
+#' @param dataset_value The value of the dataset to filter. Default is "AllExperimental".
+#' @param metric_col The name of the column in \code{df} containing the metric names. Default is "metric".
+#' @param dataset_col The name of the column in \code{df} containing dataset names. Default is "dataset".
+#' @param participant_col The name of the column in \code{df} containing participant/tool names. Default is "participant_id".
+#' @param rank_col The name of the column in \code{df} containing the ranking values e.g. generated by `rank_metrics`. Default is "rank".
+#' 
+#' @return A character vector of participant IDs ordered by rank.
+#' 
+#' @export
+rank_participant_single <- function(df,
+                                    metric_value = "F1_score",
+                                    dataset_value = "AllExperimental",
+                                    metric_col = "metric",
+                                    dataset_col = "dataset",
+                                    participant_col = "participant_id",
+                                    rank_col = "rank") {
+  
+  df %>%
+    filter(!!sym(metric_col) == metric_value,
+           !!sym(dataset_col) == dataset_value) %>%
+    mutate({{participant_col}} := fct_reorder(!!sym(participant_col), !!sym(rank_col), .fun = min)) %>%
+    pull(!!sym(participant_col)) %>%
+    levels()
+}
+
 
 
 #' Make a bump plot comparing ranks in experimental data as a function of window size
@@ -484,8 +535,43 @@ absquant1_heatmaps_ref <- map(window_sizes,
                                                   ref_dataset = "AllExperimental")
 )
 
+id_heatmaps_ref$`50`
 
-# repeat for de-novo + reference-based combined
+# Heatmaps for all window sizes with prec, sens, f1 and jaccard  - ranked by f1 in combo of experimental datasets
+# (1 plot per window size)
+id_heatmaps_f1 <- map(window_sizes,
+    ~ filter(id_df_summ, window_size == .x) %>%
+      plot_faceted_heatmap(.,
+                           metrics = window_size_metrics,
+                           participant_order = rev(rank_participant_single(.)),
+                           plot_base_size = 12,
+                           label_size = 2.25
+      )
+)
+
+absquant0_heatmaps_f1 <- map(window_sizes,
+                      ~ filter(absquant0_df_summ, window_size == .x) %>%
+                        plot_faceted_heatmap(.,
+                                             metrics = window_size_metrics,
+                                             participant_order = rev(rank_participant_single(.)),
+                                             label_size = 2.25
+                        )
+)
+
+absquant1_heatmaps_f1 <- map(window_sizes,
+                              ~ filter(absquant1_df_summ, window_size == .x) %>%
+                                plot_faceted_heatmap(.,
+                                                     metrics = window_size_metrics,
+                                                     participant_order = rev(rank_participant_single(.)),
+                                                     label_size = 2.25
+                                )
+)
+
+id_heatmaps_f1$`50`
+absquant0_heatmaps_f1$`50`
+absquant1_heatmaps_f1$`50`
+
+# repeat for de-novo + reference-based combined (with and without TPM filtering reference-based)
 id_absquant0_heatmaps_ref <- map(window_sizes,
                                  ~ plot_faceted_heatmap_ref(filter(id_absquant0_df_summ, window_size == .x),
                                                             metrics = window_size_metrics,
@@ -499,12 +585,38 @@ id_absquant1_heatmaps_ref <- map(window_sizes,
                                                         ref_dataset = "AllExperimental")
 )
 
-  
-# id_heatmaps_ref$`50`
-# absquant0_heatmaps_ref$`50`
-# absquant1_heatmaps_ref$`50`
-# id_absquant0_heatmaps_ref$`50`
-# id_absquant1_heatmaps_ref$`50`
+# repeat, again ranked by median F1 score across all experimental samples
+id_absquant0_heatmaps_f1 <- map(window_sizes,
+                                ~ filter(id_absquant0_df_summ, window_size == .x) %>%
+                                  plot_faceted_heatmap(.,
+                                                       metrics = window_size_metrics,
+                                                       participant_order = rev(rank_participant_single(.,
+                                                                                                       rank_col = "rank.combined" # ranks of combo of de-novo & ref-based ID
+                                                                                                       )
+                                                                               ),
+                                                       label_size = 2.25,
+                                                       plot_base_size = 12
+                                  )
+)
+
+
+id_absquant1_heatmaps_f1 <- map(window_sizes,
+                                ~ filter(id_absquant1_df_summ, window_size == .x) %>%
+                                  plot_faceted_heatmap(.,
+                                                       metrics = window_size_metrics,
+                                                       participant_order = rev(rank_participant_single(.,
+                                                                                                       rank_col = "rank.combined" # ranks of combo of de-novo & ref-based ID
+                                                                                                       )
+                                                                               ),
+                                                       label_size = 2.25,
+                                                       plot_base_size = 12
+                                  )
+)
+
+id_absquant0_heatmaps_ref$`50`
+id_absquant1_heatmaps_ref$`50`
+id_absquant0_heatmaps_f1$`50`
+id_absquant1_heatmaps_f1$`50`
 
 # Abs quant - summary plots of pearson r and FP TPM %
 #
@@ -552,8 +664,55 @@ absquant1_heatmaps_ref <- map(window_sizes,
 )
 
 
-# absquant0_heatmaps_ref$`50`
-# absquant1_heatmaps_ref$`50`
+# Repeat, by ranking tools just by median pearson R in all experimental samples (i.e. consistent y axis)
+absquant0_heatmaps_pr <- map(window_sizes,
+    ~ filter(absquant0_df_summ, window_size == .x) %>%
+      # messy, but need to put % on fraction scale for fills to match
+      # and make dummy fill col so lower fraction = better fill/colour (and can sort best-worst in same order)
+      mutate(metrics.value.median = if_else(metric == "Percent_FP_TPM",
+                                            metrics.value.median / 100, metrics.value.median),
+             metrics.value.iqr = if_else(metric == "Percent_FP_TPM",
+                                         metrics.value.iqr / 100, metrics.value.iqr),
+             metric = if_else(metric == "Percent_FP_TPM", "Fraction_FP_TPM", metric),
+             plot_fill = if_else(metric == "Fraction_FP_TPM", 1 - metrics.value.median, metrics.value.median)
+             ) %>%
+      plot_faceted_heatmap(.,
+                           metrics = c("Pearson_r", "Fraction_FP_TPM"),
+                           participant_order = rev(rank_participant_single(., metric_value = "Pearson_r")),
+                           fill_col = "plot_fill",
+                           label_size = 3, 
+                           plot_label_sep = "\n+/-" # put IQR underneath median
+                           )
+    
+    )
+
+absquant1_heatmaps_pr <- map(window_sizes,
+                             ~ filter(absquant1_df_summ, window_size == .x) %>%
+                               # messy, but need to put % on fraction scale for fills to match
+                               # and make dummy fill col so lower fraction = better fill/colour (and can sort best-worst in same order)
+                               mutate(metrics.value.median = if_else(metric == "Percent_FP_TPM",
+                                                                     metrics.value.median / 100, metrics.value.median),
+                                      metrics.value.iqr = if_else(metric == "Percent_FP_TPM",
+                                                                  metrics.value.iqr / 100, metrics.value.iqr),
+                                      metric = if_else(metric == "Percent_FP_TPM", "Fraction_FP_TPM", metric),
+                                      plot_fill = if_else(metric == "Fraction_FP_TPM", 1 - metrics.value.median, metrics.value.median)
+                               ) %>%
+                               plot_faceted_heatmap(.,
+                                                    metrics = c("Pearson_r", "Fraction_FP_TPM"),
+                                                    participant_order = rev(rank_participant_single(., metric_value = "Pearson_r")),
+                                                    fill_col = "plot_fill",
+                                                    label_size = 3, 
+                                                    plot_label_sep = "\n+/-" # put IQR underneath median
+                               )
+                             
+)
+
+
+absquant0_heatmaps_ref$`50`
+absquant1_heatmaps_ref$`50`
+absquant0_heatmaps_pr$`50`
+absquant1_heatmaps_pr$`50`
+
 
 # output plots to disk
 
@@ -576,7 +735,23 @@ walk2(id_heatmaps_ref,
                                            "denovo_id_heatmap.prec_sens_f1_jacc.window_size_", .y, ".pdf")),
                plot = .x,
                width = 11.7,
-               height = 8.3, units = "in")
+               height = 8.3, 
+               units = "in")
+)
+
+# de novo only + ranked by F1-score in across experimental samples
+walk2(id_heatmaps_f1,
+      names(id_heatmaps_f1),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-12-06_",
+                                           "denovo_id_heatmap.prec_sens_f1_jacc.median_f1_experimental_ranked.window_size_",
+                                           .y,
+                                           ".pdf")
+                                    ),
+               plot = .x,
+               width = 140*1.5,
+               height = 100*1.5,
+               units = "mm")
 )
 
 # ref-based identification only
@@ -598,6 +773,36 @@ walk2(absquant1_heatmaps_ref,
                plot = .x,
                width = 11.7,
                height = 8.3, units = "in")
+)
+
+# ref-based identification only , ranking by median F1 across experimental samples
+walk2(absquant0_heatmaps_f1,
+      names(absquant0_heatmaps_f1),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-12-06_",
+                                           "annot0_id_heatmap.prec_sens_f1_jacc.median_f1_experimental_ranked.window_size_",
+                                           .y,
+                                           ".pdf")
+      ),
+      plot = .x,
+      width = 140*1.5,
+      height = 100*1.5,
+      units = "mm")
+      )
+
+
+walk2(absquant1_heatmaps_f1,
+      names(absquant1_heatmaps_f1),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-12-06_",
+                                           "annot1_id_heatmap.prec_sens_f1_jacc.median_f1_experimental_ranked.window_size_",
+                                           .y,
+                                           ".pdf")
+      ),
+      plot = .x,
+      width = 140*1.5,
+      height = 100*1.5,
+      units = "mm")
 )
 
 
@@ -625,6 +830,32 @@ walk2(id_absquant1_heatmaps_ref,
                height = 8.3, units = "in")
 )
 
+# Combined de-novo + ref - ranked by median F1 in All experimental samples
+walk2(id_absquant0_heatmaps_f1,
+      names(id_absquant0_heatmaps_f1),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-12-06_",
+                                           "denovo_annot0_id_heatmap.prec_sens_f1_jacc.median_f1_experimental_ranked.window_size_",
+                                           .y, ".pdf")),
+               plot = .x,
+               width = 140*1.5,
+               height = 100*1.5,
+               units = "mm")
+      )
+
+walk2(id_absquant1_heatmaps_f1,
+      names(id_absquant1_heatmaps_f1),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-12-06_",
+                                           "denovo_annot1_id_heatmap.prec_sens_f1_jacc.median_f1_experimental_ranked.window_size_",
+                                           .y, ".pdf")),
+               plot = .x,
+               width = 140*1.5,
+               height = 100*1.5,
+               units = "mm")
+)
+
+
 ## abs quant heatmaps
 
 walk2(absquant0_heatmaps_ref,
@@ -650,6 +881,35 @@ walk2(absquant1_heatmaps_ref,
 )
 
 
+# ranked by median pearson R across all experimental samples
+walk2(absquant0_heatmaps_pr,
+      names(absquant0_heatmaps_pr),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-12-06_",
+                                           "absquant0_heatmap.corr_fp.median_f1_experimental_ranked.window_size_",
+                                           .y, ".pdf")),
+               plot = .x,
+               width = 140*1.5,
+               height = 100*1.5,
+               units = "mm"
+               )
+)
+
+
+walk2(absquant1_heatmaps_pr,
+      names(absquant1_heatmaps_pr),
+      ~ ggsave(filename = file.path(heatmap_outdir,
+                                    paste0("2024-12-06_",
+                                           "absquant1_heatmap.corr_fp.median_f1_experimental_ranked.window_size_",
+                                           .y, ".pdf")),
+               plot = .x,
+               width = 140*1.5,
+               height = 100*1.5,
+               units = "mm"
+      )
+)
+
+
 ## rank plots
 
 ggsave(filename = file.path(ranks_outdir,
@@ -672,8 +932,6 @@ walk2(exper_vs_simm_rank_plots,
                width = 11.7,
                height = 8.3, units = "in")
 )
-
-
 
 
 
